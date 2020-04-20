@@ -1,0 +1,108 @@
+#!/bin/python3
+import argparse, string, tempfile, subprocess
+from urllib.parse import urlparse
+from typing import List
+
+VALID_NAME = string.ascii_letters + string.digits + '@._+-'
+VALID_VERSION = string.ascii_letters + string.digits + '@._+'
+VALID_DESCRIPTION = string.ascii_letters + string.digits + string.punctuation + ' '
+
+PKGBUILD_TEMPLATE = """
+pkgname={name}
+pkgver={version}
+pkgrel={pkgrel}
+pkgdesc="{description}"
+arch=('any')
+url="{url}"
+provides=({provides})
+
+package() {opbracket}
+  mkdir -p "$pkgdir/usr/share/makefake"
+  touch "$pkgdir/usr/share/makefake/{name}"
+{endbracket}"""
+
+
+class FakePackage(object):
+    """Class representing the fake package being built."""
+    def __init__(self, provides: List[str],
+            name: str = None,
+            version: str = "1.0.0",
+            pkgrel: int = 1,
+            description: str = None,
+            url: str = "https://github.com/DragoonAethis/makefake"):
+        super(FakePackage, self).__init__()
+
+        self.provides = provides
+        if len(self.provides) < 1:
+            raise Exception("At least one package or resource must be provided by a fake package.")
+
+        for provide in provides:
+            if not all(char in VALID_NAME for char in provide):
+                raise Exception(f"{provide} is not a valid provides name (range: {VALID_NAME})")
+
+        first_provides = provides[0]
+
+        if not name:
+            self.name = f"fake-{first_provides}"
+        else:
+            if not all(char in VALID_NAME for char in name):
+                raise Exception(f"{name} is not a valid package name (range: {VALID_NAME})")
+
+            if name.startswith('-') or name.startswith('.'):
+                raise Exception(f"{name} is not a valid package name (cannot start with a hyphen/dot)")
+
+            self.name = str(name)
+
+        if not all(char in VALID_VERSION for char in version):
+            raise Exception(F"{version} is nto a valid package version (range: {VALID_VERSION}")
+
+        self.version = version
+        self.pkgrel = pkgrel
+
+        if not description:
+            self.description = f"Fake package providing {self.name} (generated with makefake)"
+        else:
+            if not all(char in VALID_DESCRIPTION for char in description):
+                raise Exception(f"{description} is not a valid package description (range: {VALID_DESCRIPTION}")
+
+            self.description = str(description)
+
+        parsed_url = urlparse(url)
+        if not(parsed_url.scheme) or not(parsed_url.netloc):
+            raise Exception("{url} is not a valid URL.")
+
+        self.url = url
+
+    def generate_pkgbuild(self):
+        provides = " ".join([f"'{x}'" for x in self.provides])
+        return PKGBUILD_TEMPLATE.format(provides=provides, name=self.name, description=self.description,
+                version=self.version, pkgrel=self.pkgrel, url=self.url,
+                opbracket='{', endbracket='}')  # mmm lazy workarounds
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+            description="Creates and installs a fake pacman package providing given packages.",
+            epilog="See https://github.com/DragoonAethis/makefake for more information.")
+    parser.add_argument('provides', metavar='PROVIDES', type=str, nargs='+', help="packages or resourcs to provide")
+    parser.add_argument('--name', default=None, type=str, help="fake package name")
+    parser.add_argument('--version', metavar="VER", default="1.0.0", type=str, help="fake version")
+    parser.add_argument('--pkgrel', metavar="REL", default=1, type=str, help="fake pkgrel")
+    parser.add_argument('--description', metavar="DESC", default=None, type=str, help="fake package description")
+    parser.add_argument('--url', default="https://github.com/DragoonAethis/makefake", type=str, help="fake package URL")
+    parser.add_argument('--print-only', action='store_true', help="display the generated PKGBUILD only")
+    args = parser.parse_args()
+
+    fake_pkg = FakePackage(args.provides, name=args.name, version=args.version,
+            pkgrel=args.pkgrel, description=args.description, url=args.url)
+
+    contents = fake_pkg.generate_pkgbuild()
+
+    if args.print_only:
+        print(contents)
+    else:
+        with tempfile.TemporaryDirectory() as tempdir:
+            with open(f"{tempdir}/PKGBUILD", 'wt') as pkgbuild:
+                pkgbuild.write(contents)
+
+            subprocess.run(["makepkg", "-si"], cwd=tempdir)
