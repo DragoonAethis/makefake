@@ -11,6 +11,7 @@ PKGBUILD_TEMPLATE = """
 pkgname={name}
 pkgver={version}
 pkgrel={pkgrel}
+epoch={epoch}
 pkgdesc="{description}"
 arch=('any')
 url="{url}"
@@ -28,6 +29,7 @@ class FakePackage(object):
             name: str = None,
             version: str = "1.0.0",
             pkgrel: int = 1,
+            epoch: int = 0,
             description: str = None,
             url: str = "https://github.com/DragoonAethis/makefake"):
         super(FakePackage, self).__init__()
@@ -58,6 +60,7 @@ class FakePackage(object):
 
         self.version = version
         self.pkgrel = pkgrel
+        self.epoch = epoch
 
         if not description:
             self.description = f"Fake package providing {self.name} (generated with makefake)"
@@ -76,7 +79,7 @@ class FakePackage(object):
     def generate_pkgbuild(self):
         provides = " ".join([f"'{x}'" for x in self.provides])
         return PKGBUILD_TEMPLATE.format(provides=provides, name=self.name, description=self.description,
-                version=self.version, pkgrel=self.pkgrel, url=self.url,
+                version=self.version, pkgrel=self.pkgrel, epoch=self.epoch, url=self.url,
                 opbracket='{', endbracket='}')  # mmm lazy workarounds
 
 
@@ -88,13 +91,14 @@ if __name__ == "__main__":
     parser.add_argument('--name', default=None, type=str, help="fake package name")
     parser.add_argument('--version', metavar="VER", default="1.0.0", type=str, help="fake version")
     parser.add_argument('--pkgrel', metavar="REL", default=1, type=str, help="fake pkgrel")
+    parser.add_argument('--epoch', metavar="EPOCH", default=0, type=str, help="fake epoch")
     parser.add_argument('--description', metavar="DESC", default=None, type=str, help="fake package description")
     parser.add_argument('--url', default="https://github.com/DragoonAethis/makefake", type=str, help="fake package URL")
     parser.add_argument('--print-only', action='store_true', help="display the generated PKGBUILD only")
     args = parser.parse_args()
 
     fake_pkg = FakePackage(args.provides, name=args.name, version=args.version,
-            pkgrel=args.pkgrel, description=args.description, url=args.url)
+            pkgrel=args.pkgrel, epoch=args.epoch, description=args.description, url=args.url)
 
     contents = fake_pkg.generate_pkgbuild()
 
